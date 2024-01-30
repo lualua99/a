@@ -2,7 +2,6 @@
  * RAM Oops/Panic logger
  *
  * Copyright (C) 2010 Marco Stornelli <marco.stornelli@gmail.com>
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2011 Kees Cook <keescook@chromium.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -822,10 +821,10 @@ static int ramoops_probe(struct platform_device *pdev)
 	 * For ramoops_init_przs() cases, the "max count" variable tells
 	 * if there are regions present. For ramoops_init_prz() cases,
 	 * the single region size is how to check.
-	*/
+	 */
 	cxt->pstore.flags = 0;
 	if (cxt->max_dump_cnt)
-	cxt->pstore.flags |= PSTORE_FLAGS_DMESG;
+		cxt->pstore.flags |= PSTORE_FLAGS_DMESG;
 	if (cxt->console_size)
 		cxt->pstore.flags |= PSTORE_FLAGS_CONSOLE;
 	if (cxt->max_ftrace_cnt)
@@ -837,14 +836,14 @@ static int ramoops_probe(struct platform_device *pdev)
 	 * Since bufsize is only used for dmesg crash dumps, it
 	 * must match the size of the dprz record (after PRZ header
 	 * and ECC bytes have been accounted for).
-	*/
+	 */
 	if (cxt->pstore.flags & PSTORE_FLAGS_DMESG) {
 		cxt->pstore.bufsize = cxt->dprzs[0]->buffer_size;
 		cxt->pstore.buf = kzalloc(cxt->pstore.bufsize, GFP_KERNEL);
 		if (!cxt->pstore.buf) {
 			pr_err("cannot allocate pstore crash dump buffer\n");
-		err = -ENOMEM;
-		goto fail_clear;
+			err = -ENOMEM;
+			goto fail_clear;
 		}
 	}
 

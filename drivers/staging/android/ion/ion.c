@@ -3,7 +3,6 @@
  * drivers/staging/android/ion/ion.c
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  *
  */
@@ -731,7 +730,6 @@ static int __ion_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
 							    sync_only_mapped);
 			ret = tmp;
 		}
-
 	}
 	mutex_unlock(&buffer->lock);
 out:
@@ -1058,6 +1056,8 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 	char caller_task_comm[TASK_COMM_LEN];
 	bool camera_heap_found = false;
 	struct task_struct *p = current->group_leader;
+	unsigned int system_heap_id = ION_HEAP(ION_SYSTEM_HEAP_ID);
+	unsigned int system_heap_id1 = ION_HEAP(ION_SYSTEM_HEAP_ID) | ION_HEAP(ION_CAMERA_HEAP_ID);
 
 	pr_debug("%s: len %zu heap_id_mask %u flags %x\n", __func__,
 		 len, heap_id_mask, flags);
@@ -1074,18 +1074,20 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 
 	down_read(&dev->lock);
 	plist_for_each_entry(heap, &dev->heaps, node) {
-                if ((1 << heap->id) & (1 << ION_CAMERA_HEAP_ID))
+		if ((1 << heap->id) & (1 << ION_CAMERA_HEAP_ID))
 			camera_heap_found = true;
-        }
+	}
 	up_read(&dev->lock);
 
 	if (pid_info <= 0) {
 		get_task_comm(task_comm, p);
-		if (strstr(task_comm, "provider@") || strstr(task_comm, "camera")) {
-			if ((heap_id_mask & (1 << ION_SYSTEM_HEAP_ID)) && camera_heap_found == true)
+		if (strnstr(task_comm, "provider@", sizeof(task_comm)) ||
+		    strnstr(task_comm, ".android.camera", sizeof(task_comm))) {
+			if ((heap_id_mask == system_heap_id ||
+			     heap_id_mask == system_heap_id1) && camera_heap_found)
 				heap_id_mask = 1 << ION_CAMERA_HEAP_ID;
 		}
-        } else {
+	} else {
 		get_task_comm(task_comm, p);
 		p = find_get_task_by_vpid(pid_info);
 		if (p) {
@@ -1095,9 +1097,11 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 			p = current->group_leader;
 			get_task_comm(caller_task_comm, p);
 		}
-		if (strstr(caller_task_comm, "provider@") || strstr(caller_task_comm, "camera")) {
-			if ((heap_id_mask & (1 << ION_SYSTEM_HEAP_ID)) && camera_heap_found == true)
-                                heap_id_mask = 1 << ION_CAMERA_HEAP_ID;
+		if (strnstr(caller_task_comm, "provider@", sizeof(caller_task_comm)) ||
+		    strnstr(caller_task_comm, ".android.camera", sizeof(caller_task_comm))) {
+			if ((heap_id_mask == system_heap_id ||
+			     heap_id_mask == system_heap_id1) && camera_heap_found)
+				heap_id_mask = 1 << ION_CAMERA_HEAP_ID;
 		}
 	}
 
@@ -1122,13 +1126,13 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 	exp_info.size = buffer->size;
 	exp_info.flags = O_RDWR;
 	exp_info.priv = buffer;
-	if (pid_info <= 0) {
+	if (pid_info <= 0)
 		exp_info.exp_name = kasprintf(GFP_KERNEL, "%s-%s-%d-%s", KBUILD_MODNAME,
-				      heap->name, current->tgid, task_comm);
-	} else {
+					      heap->name, current->tgid, task_comm);
+	else
 		exp_info.exp_name = kasprintf(GFP_KERNEL, "%s-%s-%d-%s-caller|%d-%s|", KBUILD_MODNAME,
-				      heap->name, current->tgid, task_comm, pid_info, caller_task_comm);
-	}
+					      heap->name, current->tgid, task_comm, pid_info, caller_task_comm);
+
 	dmabuf = dma_buf_export(&exp_info);
 	if (IS_ERR(dmabuf)) {
 		_ion_buffer_destroy(buffer);
@@ -1411,10 +1415,10 @@ void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 	}
 
 	if (!debugfs_create_file(heap->name, 0664,
-			dev->heaps_debug_root, heap,
+				 dev->heaps_debug_root, heap,
 			&debug_heap_fops2)) {
 		pr_err("Failed to create heap debugfs at %s/%s\n",
-				dentry_path(dev->heaps_debug_root, buf, 256), heap->name);
+		       dentry_path(dev->heaps_debug_root, buf, 256), heap->name);
 	}
 
 	down_write(&dev->lock);

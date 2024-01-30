@@ -5,6 +5,7 @@
  *  Copyright (C) 2012  Amit Daniel <amit.kachhap@linaro.org>
  *
  *  Copyright (C) 2014  Viresh Kumar <viresh.kumar@linaro.org>
+ *  Copyright (c) 2022  Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  *  This program is free software; you can redistribute it and/or modify
@@ -127,7 +128,11 @@ static int cpufreq_thermal_notifier(struct notifier_block *nb,
 	unsigned long clipped_freq = ULONG_MAX, floor_freq = 0;
 	struct cpufreq_cooling_device *cpufreq_cdev;
 
+#ifndef CONFIG_BOARD_XIAOMI
+	if (event != CPUFREQ_INCOMPATIBLE)
+#else
 	if (event != CPUFREQ_THERMAL)
+#endif
 		return NOTIFY_DONE;
 
 	mutex_lock(&cooling_list_lock);
@@ -156,6 +161,7 @@ static int cpufreq_thermal_notifier(struct notifier_block *nb,
 		if (clipped_freq > cpufreq_cdev->clipped_freq)
 			clipped_freq = cpufreq_cdev->clipped_freq;
 	}
+
 	cpufreq_verify_within_limits(policy, floor_freq, clipped_freq);
 	mutex_unlock(&cooling_list_lock);
 
@@ -172,12 +178,12 @@ void cpu_limits_set_level(unsigned int cpu, unsigned int max_freq)
 	list_for_each_entry(cpufreq_cdev, &cpufreq_cdev_list, node) {
 		sscanf(cpufreq_cdev->cdev->type, "thermal-cpufreq-%d", &cdev_cpu);
 		if (cdev_cpu == cpu) {
-			for (level = 0; level <= cpufreq_cdev->max_level; level++) {
+			for (level = 0; level < cpufreq_cdev->max_level; level++) {
 				int target_freq = cpufreq_cdev->em->table[level].frequency;
-				if (max_freq <= target_freq) {
+				if (max_freq >= target_freq) {
 					cdev = cpufreq_cdev->cdev;
 					if (cdev)
-						cdev->ops->set_cur_state(cdev, cpufreq_cdev->max_level - level);
+						cdev->ops->set_cur_state(cdev, level);
 					break;
 				}
 			}
@@ -386,7 +392,7 @@ static int cpufreq_set_min_state(struct thermal_cooling_device *cdev,
 	unsigned int floor_freq;
 
 	if (state > cpufreq_cdev->max_level)
-		state = cpufreq_cdev->max_level;
+		return -EINVAL;
 
 	if (cpufreq_cdev->cpufreq_floor_state == state)
 		return 0;
@@ -453,6 +459,7 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 		cpufreq_update_policy(cpufreq_cdev->policy->cpu);
 		put_online_cpus();
 	}
+
 	return 0;
 }
 

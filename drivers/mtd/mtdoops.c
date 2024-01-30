@@ -2,7 +2,6 @@
  * MTD Oops/Panic logger
  *
  * Copyright © 2007 Nokia Corporation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Richard Purdie <rpurdie@openedhand.com>
  *
@@ -78,12 +77,12 @@ module_param_string(mtddev, mtddev, 80, 0400);
 MODULE_PARM_DESC(mtddev,
 		"name or index number of the MTD device to use");
 
-static int dump_oops = 0;
+static int dump_oops;
 module_param(dump_oops, int, 0600);
 MODULE_PARM_DESC(dump_oops,
 		"set to 1 to dump oopses, 0 to only dump panics (default 1)");
 
-static int work_done = 0;
+static int work_done;
 
 static struct mtdoops_context {
 	struct kmsg_dumper dump;
@@ -152,7 +151,7 @@ static void mtdoops_inc_counter(struct mtdoops_context *cxt)
 		cxt->nextpage = 0;
 		printk(KERN_DEBUG "mtdoops: new  nextpage: %d,oops_pages:%d\n",
 				cxt->nextpage, cxt->oops_pages);
-		}
+	}
 	cxt->nextcount++;
 	if (cxt->nextcount == 0xffffffff)
 		cxt->nextcount = 0;
@@ -308,8 +307,7 @@ static void find_next_position(struct mtdoops_context *cxt)
 	if (maxcount == 0xffffffff) {
 		cxt->nextpage = cxt->oops_pages - 1;
 		cxt->nextcount = 0;
-	}
-	else {
+	} else {
 		cxt->nextpage = maxpos;
 		cxt->nextcount = maxcount;
 	}
@@ -357,7 +355,7 @@ static void mtdoops_do_dump(struct kmsg_dumper *dumper,
 			struct mtdoops_context, dump);
 	size_t ret_len = 0;
 	size_t pmsg_rem = 0;
-	size_t pmsg_cpy_size= 0;
+	size_t pmsg_cpy_size = 0;
 	void *pmsg_addr;
 
 	/* Only dump oopses if dump_oops is set */
@@ -373,7 +371,7 @@ static void mtdoops_do_dump(struct kmsg_dumper *dumper,
 	pmsg_cpy_size = record_size - (ret_len + MTDOOPS_HEADER_SIZE);
 
 	spin_lock(&pmsg_start.lock);
-	if(pmsg_start.start >= pmsg_cpy_size)
+	if (pmsg_start.start >= pmsg_cpy_size)
 		memcpy(cxt->oops_buf + (ret_len + MTDOOPS_HEADER_SIZE), pmsg_addr + (pmsg_start.start - pmsg_cpy_size), pmsg_cpy_size);
 	else {
 		pmsg_rem = pmsg_cpy_size - pmsg_start.start;

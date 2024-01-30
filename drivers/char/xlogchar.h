@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 XiaoMi, Inc.
+/**
  * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,9 +18,9 @@
  * and use the ping pong buffer for write and read
  */
 
-#define XLOGBUF_SIZE (1024*1024)
+#define XLOGBUF_SIZE (1024 * 1024)
 #define XLOGPKG_SIZE 512
-#define XLOGPKG_NUM (XLOGBUF_SIZE/XLOGPKG_SIZE)
+#define XLOGPKG_NUM (XLOGBUF_SIZE / XLOGPKG_SIZE)
 struct xlogchar_dev {
 	/* State for the char driver */
 	unsigned int major;
@@ -30,7 +30,7 @@ struct xlogchar_dev {
 	char *name;
 	size_t readindex;
 	size_t writeindex;
-	size_t  free_size;
+	size_t free_size;
 	struct class *xlogchar_class;
 	struct device *xlog_dev;
 	struct mutex xlog_mutex;

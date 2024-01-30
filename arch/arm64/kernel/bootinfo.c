@@ -2,7 +2,6 @@
  * bootinfo.c
  *
  * Copyright (C) 2011 Xiaomi Ltd.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -165,13 +164,13 @@ static int __init bootinfo_init(void)
 
 	bootinfo_kobj = kobject_create_and_add("bootinfo", NULL);
 	if (bootinfo_kobj == NULL) {
-		pr_err("bootinfo_init: subsystem_register failed\n");
+		pr_err("%s: subsystem_register failed\n", __func__);
 		goto fail;
 	}
 
 	ret = sysfs_create_group(bootinfo_kobj, &attr_group);
 	if (ret) {
-		pr_err("bootinfo_init: subsystem_register failed\n");
+		pr_err("%s: subsystem_register failed\n", __func__);
 		goto sys_fail;
 	}
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2015, 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/delay.h>
@@ -79,7 +78,8 @@ int esoc_set_boot_fail_action(struct esoc_clink *esoc_clink, u32 action)
 
 	atomic_set(&mdm_drv->boot_fail_action, BOOT_FAIL_ACTION_NOP);
 	esoc_mdm_log("Boot fail action configured to %u\n", action);
-	dev_err(&esoc_clink->dev, "Boot fail action configured to %u\n", action);
+	dev_err(&esoc_clink->dev, "Boot fail action configured to %u\n",
+		action);
 
 	return 0;
 }

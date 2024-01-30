@@ -3,7 +3,6 @@
   * Core layer of touchdriver architecture.
   *
   * Copyright (C) 2019 - 2020 Goodix, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
   *
   * This program is free software; you can redistribute it and/or modify
   * it under the terms of the GNU General Public License as published by
@@ -33,6 +32,10 @@
 #endif
 #include <linux/pm_wakeup.h>
 #include "goodix_ts_core.h"
+
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+#include <linux/input/tp_common.h>
+#endif
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 #include <linux/input/mt.h>
@@ -921,6 +924,32 @@ static struct attribute *sysfs_attrs[] = {
 static const struct attribute_group sysfs_group = {
 	.attrs = sysfs_attrs,
 };
+
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+static ssize_t double_tap_show(struct kobject *kobj,
+				struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", goodix_core_data->double_wakeup);
+}
+
+static ssize_t double_tap_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int rc, val;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc)
+		return -EINVAL;
+
+	goodix_core_data->double_wakeup = !!val;
+	return count;
+}
+
+static struct tp_common_ops double_tap_ops = {
+	.show = double_tap_show,
+	.store = double_tap_store
+};
+#endif
 
 static ssize_t goodix_sysfs_config_write(struct file *file,
 		struct kobject *kobj, struct bin_attribute *attr,
@@ -2014,9 +2043,6 @@ static int goodix_ts_suspend(struct goodix_ts_core *core_data)
 		}
 	}
 	mutex_unlock(&goodix_modules.mutex);
-#ifdef CONFIG_FACTORY_BUILD
-	goodix_ts_power_off(core_data);
-#endif
 out:
 	goodix_ts_release_connects(core_data);
 	core_data->ts_event.touch_data.touch_num = 0;
@@ -2050,9 +2076,6 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 		/*goodix_ts_irq_enable(core_data, true);*/
 		goto out;
 	}
-#ifdef CONFIG_FACTORY_BUILD
-	goodix_ts_power_on(core_data);
-#endif
 	mutex_lock(&goodix_modules.mutex);
 	if (!list_empty(&goodix_modules.head)) {
 		list_for_each_entry_safe(ext_module, next,
@@ -3151,6 +3174,14 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		goto out;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+	r = tp_common_set_double_tap_ops(&double_tap_ops);
+	if (r < 0) {
+		ts_err("%s: Failed to create double_tap node err=%d\n",
+			__func__, r);
+	}
+#endif
+
 	core_data->event_wq = alloc_workqueue("gdt-event-queue",
 				WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
 	if (!core_data->event_wq) {
@@ -3267,10 +3298,6 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		gtp_init_touchmode_data();
 #endif
 	core_data->fod_status = 0;
-
-#ifdef CONFIG_FACTORY_BUILD
-	core_data->fod_status = 1;
-#endif
 
 out:
 	if (r) {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 #include <drm/msm_drm_pp.h>
 #include "sde_hw_color_proc_common_v4.h"
@@ -222,7 +222,11 @@ void sde_setup_dspp_pccv4(struct sde_hw_dspp *ctx, void *cfg)
 		return;
 	}
 
-	pcc_cfg = hw_cfg->payload;
+	if (hw_cfg->payload_clear) {
+		pcc_cfg = hw_cfg->payload_clear;
+	} else {
+		pcc_cfg = hw_cfg->payload;
+	}
 
 	for (i = 0; i < PCC_NUM_PLANES; i++) {
 		base = ctx->cap->sblk->pcc.base + (i * sizeof(u32));
@@ -335,7 +339,11 @@ void sde_setup_dspp_ltm_hist_ctrlv1(struct sde_hw_dspp *ctx, void *cfg,
 	op_mode = SDE_REG_READ(&ctx->hw, offset);
 
 	if (!enable) {
-		op_mode &= ~BIT(0);
+		if (op_mode & BIT(1))
+			op_mode &= ~BIT(0);
+		else
+			op_mode = 0;
+
 		SDE_REG_WRITE(&ctx->hw, ctx->cap->sblk->ltm.base + 0x4,
 			(op_mode & 0x1FFFFFF));
 		return;

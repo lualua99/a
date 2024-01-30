@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 XiaoMi, Inc.
+/**
  * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -41,12 +41,13 @@ static int xlogchar_close(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t xlogchar_read(struct file *file, char __user *buf,
-				size_t count, loff_t *ppos)
+static ssize_t xlogchar_read(struct file *file, char __user *buf, size_t count,
+			     loff_t *ppos)
 {
 	u64 temp = count;
 	int err;
 	size_t copy_bytes;
+
 	if (do_div(temp, XLOGPKG_SIZE) || (count > XLOGBUF_SIZE)) {
 		pr_err("xlog: invalide count %zu\n", count);
 		return -EBADMSG;
@@ -58,22 +59,29 @@ static ssize_t xlogchar_read(struct file *file, char __user *buf,
 	mutex_lock(&xlogdriver->xlog_mutex);
 	while ((XLOGBUF_SIZE - xlogdriver->free_size) < count) {
 		mutex_unlock(&xlogdriver->xlog_mutex);
-		pr_info("%s  goint to sleep\n", __func__);
-		err = wait_event_interruptible(xlogdriver->wait_q, (XLOGBUF_SIZE - xlogdriver->free_size) >= count);
-		pr_info("%s  wakeup \n", __func__);
-		if (err == -ERESTARTSYS) {
-			pr_err("%s wake up by signal return erro\n", __func__);
+		pr_info("%s going to sleep\n", __func__);
+
+		err = wait_event_interruptible(
+			xlogdriver->wait_q,
+			(XLOGBUF_SIZE - xlogdriver->free_size) >= count);
+		if (err == -ERESTARTSYS)
 			return -ERESTARTSYS;
-		}
+
+		pr_info("%s wakeup\n", __func__);
 		mutex_lock(&xlogdriver->xlog_mutex);
 	}
 	if (XLOGBUF_SIZE < xlogdriver->readindex + count) {
 		copy_bytes = XLOGBUF_SIZE - xlogdriver->readindex;
-		err = copy_to_user(buf, (void *)(xlogdriver->buf + xlogdriver->readindex), copy_bytes);
-		err = copy_to_user(buf + copy_bytes, (void *)(xlogdriver->buf), count - copy_bytes);
+		err = copy_to_user(
+			buf, (void *)(xlogdriver->buf + xlogdriver->readindex),
+			copy_bytes);
+		err = copy_to_user(buf + copy_bytes, (void *)(xlogdriver->buf),
+				   count - copy_bytes);
 		xlogdriver->readindex = count - copy_bytes;
 	} else {
-		err = copy_to_user(buf, (void *)(xlogdriver->buf + xlogdriver->readindex), count);
+		err = copy_to_user(
+			buf, (void *)(xlogdriver->buf + xlogdriver->readindex),
+			count);
 		xlogdriver->readindex += count;
 	}
 	xlogdriver->free_size += count;
@@ -81,13 +89,13 @@ static ssize_t xlogchar_read(struct file *file, char __user *buf,
 	return count;
 }
 
-
 static ssize_t xlogchar_write(struct file *file, const char __user *buf,
 			      size_t count, loff_t *ppos)
 {
 	int err = 0;
 	size_t copy_bytes;
 	u64 temp = count;
+
 	pr_info("%s: count is %zu\n", __func__, count);
 	if (do_div(temp, XLOGPKG_SIZE) || (count > XLOGBUF_SIZE)) {
 		pr_err("xlog: invalide count %zu\n", count);
@@ -95,22 +103,26 @@ static ssize_t xlogchar_write(struct file *file, const char __user *buf,
 	}
 	mutex_lock(&xlogdriver->xlog_mutex);
 	if (xlogdriver->free_size < count) {
-		pr_err("xlog: no more space to write free: %zu, count %zu\n", xlogdriver->free_size, count);
+		pr_err("xlog: no more space to write free: %zu, count %zu\n",
+		       xlogdriver->free_size, count);
 		mutex_unlock(&xlogdriver->xlog_mutex);
-		return  -EIO;
+		return -EIO;
 	}
 	if (XLOGBUF_SIZE < xlogdriver->writeindex + count) {
 		copy_bytes = XLOGBUF_SIZE - xlogdriver->writeindex;
-		err = copy_from_user(xlogdriver->buf + xlogdriver->writeindex, buf, copy_bytes);
-		err = copy_from_user(xlogdriver->buf, buf + copy_bytes,  count - copy_bytes);
+		err = copy_from_user(xlogdriver->buf + xlogdriver->writeindex,
+				     buf, copy_bytes);
+		err = copy_from_user(xlogdriver->buf, buf + copy_bytes,
+				     count - copy_bytes);
 		xlogdriver->writeindex = count - copy_bytes;
 	} else {
-		err = copy_from_user(xlogdriver->buf + xlogdriver->writeindex, buf, count);
+		err = copy_from_user(xlogdriver->buf + xlogdriver->writeindex,
+				     buf, count);
 		xlogdriver->writeindex += count;
 	}
 	xlogdriver->free_size -= count;
 	mutex_unlock(&xlogdriver->xlog_mutex);
-	pr_info("%s  wakeup reader \n", __func__);
+	pr_info("%s wakeup reader\n", __func__);
 	wake_up_interruptible(&xlogdriver->wait_q);
 	return count;
 }
@@ -119,7 +131,8 @@ ssize_t xlogchar_kwrite(const char *buf, size_t count)
 {
 	size_t copy_bytes;
 	u64 temp = count;
-	pr_err("%s start\n", __func__);
+
+	pr_err("%s: start\n", __func__);
 	pr_info("%s: count is %zu\n", __func__, count);
 	if (do_div(temp, XLOGPKG_SIZE) || (count > XLOGBUF_SIZE)) {
 		pr_err("xlog: invalide count %zu\n", count);
@@ -127,14 +140,16 @@ ssize_t xlogchar_kwrite(const char *buf, size_t count)
 	}
 	mutex_lock(&xlogdriver->xlog_mutex);
 	if (xlogdriver->free_size < count) {
-		pr_err("xlog: no more space to write free: %zu, count %zu\n", xlogdriver->free_size, count);
+		pr_err("xlog: no more space to write free: %zu, count %zu\n",
+		       xlogdriver->free_size, count);
 		mutex_unlock(&xlogdriver->xlog_mutex);
-		return  -EIO;
+		return -EIO;
 	}
 	if (XLOGBUF_SIZE < xlogdriver->writeindex + count) {
 		copy_bytes = XLOGBUF_SIZE - xlogdriver->writeindex;
-		memcpy(xlogdriver->buf + xlogdriver->writeindex, buf, copy_bytes);
-		memcpy(xlogdriver->buf, buf + copy_bytes,  count - copy_bytes);
+		memcpy(xlogdriver->buf + xlogdriver->writeindex, buf,
+		       copy_bytes);
+		memcpy(xlogdriver->buf, buf + copy_bytes, count - copy_bytes);
 		xlogdriver->writeindex = count - copy_bytes;
 	} else {
 		memcpy(xlogdriver->buf + xlogdriver->writeindex, buf, count);
@@ -142,11 +157,10 @@ ssize_t xlogchar_kwrite(const char *buf, size_t count)
 	}
 	xlogdriver->free_size -= count;
 	mutex_unlock(&xlogdriver->xlog_mutex);
-	pr_info("%s  wakeup reader \n", __func__);
+	pr_info("%s: wakeup reader\n", __func__);
 	wake_up_interruptible(&xlogdriver->wait_q);
 	return count;
 }
-
 EXPORT_SYMBOL(xlogchar_kwrite);
 
 static unsigned int xlogchar_poll(struct file *file, poll_table *wait)
@@ -156,19 +170,16 @@ static unsigned int xlogchar_poll(struct file *file, poll_table *wait)
 	return masks;
 }
 
-
-static const struct file_operations xlogcharfops = {
-	.owner = THIS_MODULE,
-	.read = xlogchar_read,
-	.write = xlogchar_write,
-	.poll = xlogchar_poll,
-	.open = xlogchar_open,
-	.release = xlogchar_close
-};
+static const struct file_operations xlogcharfops = { .owner = THIS_MODULE,
+						     .read = xlogchar_read,
+						     .write = xlogchar_write,
+						     .poll = xlogchar_poll,
+						     .open = xlogchar_open,
+						     .release =
+							     xlogchar_close };
 
 static int xlogchar_setup_cdev(dev_t devno)
 {
-
 	int err;
 
 	cdev_init(xlogdriver->cdev, &xlogcharfops);
@@ -190,14 +201,13 @@ static int xlogchar_setup_cdev(dev_t devno)
 		return PTR_ERR(xlogdriver->xlogchar_class);
 	}
 
-	xlogdriver->xlog_dev = device_create(xlogdriver->xlogchar_class,
-		NULL, devno, (void *)xlogdriver, "xlog");
+	xlogdriver->xlog_dev = device_create(xlogdriver->xlogchar_class, NULL,
+					     devno, (void *)xlogdriver, "xlog");
 
 	if (!xlogdriver->xlog_dev)
 		return -EIO;
 
 	return 0;
-
 }
 
 static int __init xlogchar_init(void)
@@ -205,7 +215,7 @@ static int __init xlogchar_init(void)
 	dev_t dev;
 	int ret;
 
-	pr_info("xlogchar_init\n");
+	pr_info("%s\n", __func__);
 	ret = 0;
 	xlogdriver = kzalloc(sizeof(struct xlogchar_dev) + 5, GFP_KERNEL);
 	if (!xlogdriver)
@@ -224,7 +234,7 @@ static int __init xlogchar_init(void)
 	strlcpy(xlogdriver->name, "xlog", 4);
 	/* Get major number from kernel and initialize */
 	ret = alloc_chrdev_region(&dev, xlogdriver->minor_start,
-				    xlogdriver->num, xlogdriver->name);
+				  xlogdriver->num, xlogdriver->name);
 	if (!ret) {
 		xlogdriver->major = MAJOR(dev);
 		xlogdriver->minor_start = MINOR(dev);
@@ -237,7 +247,7 @@ static int __init xlogchar_init(void)
 	if (ret)
 		pr_err("xlogchar_setup_cdev failed\n");
 
-	pr_info("xlogchar_init done\n");
+	pr_info("%s: done\n", __func__);
 
 	return ret;
 }
@@ -257,7 +267,7 @@ static void xlogchar_exit(void)
 			class_destroy(xlogdriver->xlogchar_class);
 		kfree(xlogdriver);
 	}
-	pr_info("done xlogchar exit\n");
+	pr_info("%s: done\n", __func__);
 }
 
 core_initcall(xlogchar_init);

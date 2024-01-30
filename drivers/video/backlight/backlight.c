@@ -2,7 +2,6 @@
  * Backlight Lowlevel Control Abstraction
  *
  * Copyright (C) 2003,2004 Hewlett-Packard Company
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  */
 
@@ -182,8 +181,11 @@ int backlight_device_set_brightness(struct backlight_device *bd,
 		if (brightness > bd->props.max_brightness)
 			rc = -EINVAL;
 		else {
-			if ((!bd->use_count && brightness) || (bd->use_count && !brightness)) {
-				pr_info("%s: set brightness to %lu\n", __func__, brightness);
+			if ((!bd->use_count && brightness) ||
+			    (bd->use_count && !brightness)) {
+				pr_info("%s: set brightness to %lu\n",
+					__func__, brightness);
+
 				if (!bd->use_count)
 					bd->use_count++;
 				else
@@ -214,11 +216,7 @@ static ssize_t brightness_store(struct device *dev,
 		return rc;
 
 	bd->usr_brightness_req = brightness;
-#ifndef CONFIG_THERMAL_DIMMING
-	brightness = (brightness <= bd->thermal_brightness_limit) ?
-				bd->usr_brightness_req :
-				bd->thermal_brightness_limit;
-#endif
+
 	rc = backlight_device_set_brightness(bd, brightness);
 
 	return rc ? rc : count;
@@ -322,9 +320,8 @@ static ssize_t brightness_clone_store(struct device *dev,
 		return rc;
 
 	bd->props.brightness_clone_backup = brightness;
-	brightness = (brightness <= bd->thermal_brightness_clone_limit) ?
-				brightness : bd->thermal_brightness_clone_limit;
 	bd->props.brightness_clone = brightness;
+
 	envp[0] = "SOURCE=sysfs";
 	envp[1] = NULL;
 	kobject_uevent_env(&bd->dev.kobj, KOBJ_CHANGE, envp);
@@ -397,19 +394,14 @@ static int bd_cdev_set_cur_brightness(struct thermal_cooling_device *cdev,
 	brightness_lvl = bd->props.max_brightness - state;
 	if (brightness_lvl == bd->thermal_brightness_limit)
 		return 0;
-	bd->thermal_brightness_limit = brightness_lvl;
 
-#ifdef CONFIG_THERMAL_DIMMING
-	sysfs_notify(&cdev->device.kobj, NULL, "cur_state");
-	pr_info("thermal dimming:set thermal_brightness_limit to %d\n", bd->thermal_brightness_limit);
-#else
+	bd->thermal_brightness_limit = brightness_lvl;
 	brightness_lvl = (bd->usr_brightness_req
 				<= bd->thermal_brightness_limit) ?
 				bd->usr_brightness_req :
 				bd->thermal_brightness_limit;
-
 	backlight_device_set_brightness(bd, brightness_lvl);
-#endif
+
 	return 0;
 }
 
@@ -529,6 +521,44 @@ struct backlight_device *backlight_device_get_by_type(enum backlight_type type)
 	return found ? bd : NULL;
 }
 EXPORT_SYMBOL(backlight_device_get_by_type);
+
+struct backlight_device *backlight_device_get_by_type_a(enum backlight_type type)
+{
+	bool found = false;
+	struct backlight_device *bd;
+
+	mutex_lock(&backlight_dev_list_mutex);
+	list_for_each_entry(bd, &backlight_dev_list, entry) {
+		if (bd->props.type == type && !strcmp(bd->dev.kobj.name, "KTZ8866A")) {
+			found = true;
+			break;
+		}
+	}
+	mutex_unlock(&backlight_dev_list_mutex);
+
+	return found ? bd : NULL;
+}
+EXPORT_SYMBOL(backlight_device_get_by_type_a);
+
+struct backlight_device *backlight_device_get_by_type_b(enum backlight_type type)
+{
+	bool found = false;
+	struct backlight_device *bd;
+
+	mutex_lock(&backlight_dev_list_mutex);
+	list_for_each_entry(bd, &backlight_dev_list, entry) {
+		if (bd->props.type == type && !strcmp(bd->dev.kobj.name, "KTZ8866B")) {
+			found = true;
+			break;
+		}
+	}
+	mutex_unlock(&backlight_dev_list_mutex);
+
+	return found ? bd : NULL;
+}
+EXPORT_SYMBOL(backlight_device_get_by_type_b);
+
+
 
 /**
  * backlight_device_unregister - unregisters a backlight device object.

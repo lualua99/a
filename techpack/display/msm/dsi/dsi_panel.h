@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _DSI_PANEL_H_
@@ -35,6 +35,7 @@
  * Override to use async transfer
  */
 #define MIPI_DSI_MSG_ASYNC_OVERRIDE BIT(4)
+#define MIPI_DSI_MSG_CMD_DMA_SCHED BIT(5)
 
 enum dsi_panel_rotation {
 	DSI_PANEL_ROTATE_NONE = 0,
@@ -85,6 +86,13 @@ struct dsi_dfps_capabilities {
 	bool dfps_support;
 };
 
+struct dsi_qsync_capabilities {
+	/* qsync disabled if qsync_min_fps = 0 */
+	u32 qsync_min_fps;
+	u32 *qsync_min_fps_list;
+	int qsync_min_fps_list_len;
+};
+
 struct dsi_dyn_clk_caps {
 	bool dyn_clk_support;
 	u32 *bit_clk_list;
@@ -117,6 +125,7 @@ struct dsi_backlight_config {
 	u32 bl_scale;
 	u32 bl_scale_sv;
 	bool bl_inverted_dbv;
+	u32 bl_dcs_subtype;
 
 	int en_gpio;
 	/* PWM params */
@@ -139,8 +148,10 @@ struct dsi_panel_reset_config {
 	u32 count;
 
 	int reset_gpio;
+	int tp_reset_gpio;
 	int disp_en_gpio;
 	int lcd_mode_sel_gpio;
+	u32 reset_powerdown_delay;
 	u32 mode_sel_state;
 };
 
@@ -157,6 +168,7 @@ struct drm_panel_esd_config {
 	bool esd_enabled;
 
 	enum esd_check_status_mode status_mode;
+	struct dsi_panel_cmd_set offset_cmd;
 	struct dsi_panel_cmd_set status_cmd;
 	u32 *status_cmds_rlen;
 	u32 *status_valid_params;
@@ -164,6 +176,12 @@ struct drm_panel_esd_config {
 	u8 *return_buf;
 	u8 *status_buf;
 	u32 groups;
+};
+
+#define BRIGHTNESS_ALPHA_PAIR_LEN 2
+struct brightness_alpha_pair {
+	u32 brightness;
+	u32 alpha;
 };
 
 struct dsi_panel {
@@ -193,6 +211,7 @@ struct dsi_panel {
 
 	struct dsi_regulator_info power_info;
 	struct dsi_backlight_config bl_config;
+	struct dsi_backlight_config bl_slaver_config;
 	struct dsi_panel_reset_config reset_config;
 	struct dsi_pinctrl_info pinctrl;
 	struct drm_panel_hdr_properties hdr_props;
@@ -209,7 +228,7 @@ struct dsi_panel {
 
 	bool panel_initialized;
 	bool te_using_watchdog_timer;
-	u32 qsync_min_fps;
+	struct dsi_qsync_capabilities qsync_caps;
 
 	char dsc_pps_cmd[DSI_CMD_PPS_SIZE];
 	enum dsi_dms_mode dms_mode;
@@ -217,9 +236,13 @@ struct dsi_panel {
 	bool sync_broadcast_en;
 
 	struct dsi_panel_mi_cfg mi_cfg;
+
 	int panel_test_gpio;
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;
+
+	struct brightness_alpha_pair *fod_dim_lut;
+	u32 fod_dim_lut_count;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -342,18 +365,24 @@ void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
 void dsi_panel_calc_dsi_transfer_time(struct dsi_host_common_cfg *config,
 		struct dsi_display_mode *mode, u32 frame_threshold_us);
 
+int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt);
+
+int dsi_panel_alloc_cmd_packets(struct dsi_panel_cmd_set *cmd,
+		u32 packet_count);
+
+int dsi_panel_create_cmd_packets(const char *data, u32 length, u32 count,
+					struct dsi_cmd_desc *cmd);
+
+void dsi_panel_destroy_cmd_packets(struct dsi_panel_cmd_set *set);
+
+void dsi_panel_dealloc_cmd_packets(struct dsi_panel_cmd_set *set);
+
 int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 				enum dsi_cmd_set_type type);
 int dsi_panel_update_backlight(struct dsi_panel *panel,
 				u32 bl_lvl);
-int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt);
-int dsi_panel_alloc_cmd_packets(struct dsi_panel_cmd_set *cmd,
-				u32 packet_count);
-int dsi_panel_create_cmd_packets(const char *data,
-				u32 length,
-				u32 count,
-				struct dsi_cmd_desc *cmd);
-void dsi_panel_destroy_cmd_packets(struct dsi_panel_cmd_set *set);
-void dsi_panel_dealloc_cmd_packets(struct dsi_panel_cmd_set *set);
+int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
+
+u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel);
 
 #endif /* _DSI_PANEL_H_ */

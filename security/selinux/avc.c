@@ -8,7 +8,6 @@
  *	Replaced the avc_lock spinlock by RCU.
  *
  * Copyright (C) 2003 Red Hat, Inc., James Morris <jmorris@redhat.com>
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  *	This program is free software; you can redistribute it and/or modify
  *	it under the terms of the GNU General Public License version 2,
@@ -703,7 +702,6 @@ static struct avc_node *avc_insert(struct selinux_avc *avc,
 		return NULL;
 
 	avc_node_populate(node, ssid, tsid, tclass, avd);
-
 	if (avc_xperms_populate(node, xp_node)) {
 		avc_node_kill(avc, node);
 		return NULL;

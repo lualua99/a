@@ -3,7 +3,6 @@
  * Backlight Lowlevel Control Abstraction
  *
  * Copyright (C) 2003,2004 Hewlett-Packard Company
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  */
 
@@ -114,8 +113,8 @@ struct backlight_device {
 	struct thermal_cooling_device *cdev;
 	/* Thermally limited max brightness */
 	int thermal_brightness_limit;
-        /* Thermally limited max brightness clone for 8192 hbm*/
-        int thermal_brightness_clone_limit;
+	/* Thermally limited max brightness clone for 8192 hbm*/
+	int thermal_brightness_clone_limit;
 	/* User brightness request */
 	int usr_brightness_req;
 
@@ -194,6 +193,8 @@ extern void backlight_force_update(struct backlight_device *bd,
 extern int backlight_register_notifier(struct notifier_block *nb);
 extern int backlight_unregister_notifier(struct notifier_block *nb);
 extern struct backlight_device *backlight_device_get_by_type(enum backlight_type type);
+extern struct backlight_device *backlight_device_get_by_type_a(enum backlight_type type);
+extern struct backlight_device *backlight_device_get_by_type_b(enum backlight_type type);
 extern int backlight_device_set_brightness(struct backlight_device *bd, unsigned long brightness);
 
 #define to_backlight_device(obj) container_of(obj, struct backlight_device, dev)

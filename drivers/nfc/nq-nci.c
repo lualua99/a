@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/kernel.h>
@@ -26,6 +25,8 @@
 #include <linux/jiffies.h>
 #endif
 #include <linux/regulator/consumer.h>
+
+#define DISABLE_NCI_DEBUG 1
 
 struct nqx_platform_data {
 	unsigned int irq_gpio;
@@ -110,7 +111,7 @@ static struct notifier_block nfcc_notifier = {
 unsigned int	disable_ctrl;
 
 #define MAX_I2C_DUMP_SIZE 512
-
+#ifdef DISABLE_NCI_DEBUG
 static void print_send_buffer(struct nqx_dev *nqx_dev, unsigned char *buf, int len)
 {
 	unsigned char output[MAX_I2C_DUMP_SIZE * 2 + 1];
@@ -119,9 +120,9 @@ static void print_send_buffer(struct nqx_dev *nqx_dev, unsigned char *buf, int l
 	if (len > MAX_I2C_DUMP_SIZE)
 		len = MAX_I2C_DUMP_SIZE - 1;
 
-	for (i = 0; i < len; i++) {
+	for (i = 0; i < len; i++)
 		snprintf(output + i * 2, 3, "%02x ", buf[i]);
-	}
+
 	dev_warn(&nqx_dev->client->dev, "%3d > %s\n", len, output);
 }
 
@@ -133,11 +134,12 @@ static void print_recv_buffer(struct nqx_dev *nqx_dev, unsigned char *buf, int l
 	if (len > MAX_I2C_DUMP_SIZE)
 		len = MAX_I2C_DUMP_SIZE - 1;
 
-	for (i = 0; i < len; i++) {
+	for (i = 0; i < len; i++)
 		snprintf(output + i * 2, 3, "%02x ", buf[i]);
-	}
+
 	dev_warn(&nqx_dev->client->dev, "%3d < %s\n", len, output);
 }
+#endif
 
 static void nqx_init_stat(struct nqx_dev *nqx_dev)
 {
@@ -374,7 +376,11 @@ static ssize_t nfc_read(struct file *filp, char __user *buf,
 		dev_dbg(&nqx_dev->client->dev, "%s : NfcNciRx %x %x %x\n",
 			__func__, tmp[0], tmp[1], tmp[2]);
 #endif
+
+#ifdef DISABLE_NCI_DEBUG
 	print_recv_buffer(nqx_dev, tmp, ret);
+#endif
+
 	if (copy_to_user(buf, tmp, ret)) {
 		dev_warn(&nqx_dev->client->dev,
 			"%s : failed to copy to user space\n", __func__);
@@ -416,7 +422,9 @@ static ssize_t nfc_write(struct file *filp, const char __user *buf,
 		goto out;
 	}
 
+#ifdef DISABLE_NCI_DEBUG
 	print_send_buffer(nqx_dev, tmp, count);
+#endif
 
 	ret = i2c_master_send(nqx_dev->client, tmp, count);
 	if (ret != count) {
@@ -860,7 +868,7 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 	int r = 0;
 	struct nqx_dev *nqx_dev = filp->private_data;
 
-	dev_warn(&nqx_dev->client->dev, "%s : enter, arg=%d \n", __func__, arg);
+	dev_warn(&nqx_dev->client->dev, "%s : enter, arg=%d\n", __func__, arg);
 
 	if (arg == NFC_POWER_OFF) {
 		/*
@@ -1050,7 +1058,7 @@ static long nfc_ioctl(struct file *pfile, unsigned int cmd,
 	int r = 0;
 	struct nqx_dev *nqx_dev = pfile->private_data;
 
-	dev_warn(&nqx_dev->client->dev, "%s : enter, arg=%d \n", __func__, arg);
+	dev_warn(&nqx_dev->client->dev, "%s : enter, arg=%d\n", __func__, arg);
 	if (!nqx_dev)
 		return -ENODEV;
 
@@ -1172,7 +1180,7 @@ reset_enable_gpio:
 	ret = i2c_master_send(client, nci_reset_cmd, NCI_RESET_CMD_LEN);
 	if (ret < 0) {
 		dev_err(&client->dev,
-			"%s: - i2c_master_send core reset Error, retry\n", __func__);
+		"%s: - i2c_master_send core reset Error, retry\n", __func__);
 
 		if (send_retry_count < MAX_RETRY_COUNT) {
 			send_retry_count  += 1;
@@ -1215,6 +1223,7 @@ reset_enable_gpio:
 				__func__);
 			goto err_nfcc_hw_check;
 		}
+
 		/* hardware dependent delay */
 		usleep_range(10000, 10100);
 
@@ -1237,8 +1246,10 @@ reset_enable_gpio:
 		}
 		goto err_nfcc_reset_failed;
 	}
+
 	/* hardware dependent delay */
 	msleep(60);
+
 #ifdef NQ_READ_INT
 	ret = is_data_available_for_read(nqx_dev);
 	if (ret <= 0) {

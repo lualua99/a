@@ -1,7 +1,6 @@
 /* drivers/misc/uid_sys_stats.c
  *
  * Copyright (C) 2014 - 2015 Google, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -385,7 +384,7 @@ static struct pid_entry *find_or_register_pid(u64 hash_code,
 	if (!pid_entry)
 		return NULL;
 
-	memcpy(pid_entry->package, package, MAX_TASK_COMM_LEN);
+	strcpy(pid_entry->package, package);
 	pid_entry->hash_code = hash_string(pid_entry->package);
 	pid_entry->pid = pid;
 	hash_add(app_hash_table, &pid_entry->hash, hash_code);
@@ -829,6 +828,7 @@ static int __init proc_uid_sys_stats_init(void)
 {
 	hash_init(hash_table);
 	hash_init(app_hash_table);
+
 	cpu_parent = proc_mkdir("uid_cputime", NULL);
 	if (!cpu_parent) {
 		pr_err("%s: failed to create uid_cputime proc entry\n",

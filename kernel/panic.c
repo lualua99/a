@@ -48,8 +48,10 @@ int panic_timeout = CONFIG_PANIC_TIMEOUT;
 EXPORT_SYMBOL_GPL(panic_timeout);
 
 ATOMIC_NOTIFIER_HEAD(panic_notifier_list);
-
 EXPORT_SYMBOL(panic_notifier_list);
+
+void (*vendor_panic_cb)(u64 sp);
+EXPORT_SYMBOL_GPL(vendor_panic_cb);
 
 static long no_blink(int state)
 {
@@ -179,6 +181,8 @@ void panic(const char *fmt, ...)
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 	dump_stack_minidump(0);
+	if (vendor_panic_cb)
+		vendor_panic_cb(0);
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
@@ -280,7 +284,11 @@ void panic(const char *fmt, ...)
 		 */
 		if (panic_reboot_mode != REBOOT_UNDEFINED)
 			reboot_mode = panic_reboot_mode;
+#ifdef CONFIG_BOARD_XIAOMI
 		machine_emergency_restart();
+#else
+		emergency_restart();
+#endif
 	}
 #ifdef __sparc__
 	{
@@ -344,10 +352,7 @@ void long_press(void)
 	printk_safe_flush_on_panic();
 	kmsg_dump(KMSG_DUMP_LONG_PRESS);
 }
-
 EXPORT_SYMBOL(long_press);
-
-
 
 /*
  * TAINT_FORCED_RMMOD could be a per-module flag but the module

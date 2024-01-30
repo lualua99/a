@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2015, 2017-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/coresight.h>
@@ -56,7 +55,8 @@ static void checknv_kobj_create(struct work_struct *work)
 	}
 
 	if (checknv_kset == NULL) {
-		checknv_kset = kset_create_and_add("checknv_errimei", NULL, NULL);
+		checknv_kset = kset_create_and_add("checknv_errimei",
+						   NULL, NULL);
 		if (!checknv_kset) {
 			pr_err("kset creation failed.");
 			goto free_kobj;
@@ -65,7 +65,8 @@ static void checknv_kobj_create(struct work_struct *work)
 
 	checknv_kobj->kset = checknv_kset;
 
-	ret = kobject_init_and_add(checknv_kobj, &checknv_ktype, NULL, "%s", "errimei");
+	ret = kobject_init_and_add(checknv_kobj, &checknv_ktype,
+				   NULL, "%s", "errimei");
 	if (ret) {
 		pr_err("%s: Error in creation kobject", __func__);
 		goto del_kobj;
@@ -464,14 +465,17 @@ static void mdm_get_restart_reason(struct work_struct *work)
 		dev_dbg(dev, "%s: Error retrieving restart reason: %d\n",
 						__func__, ret);
 	} else {
-		strlcpy(last_modem_sfr_reason, sfr_buf, MAX_SSR_REASON_LEN);
-		pr_err("modem subsystem failure reason: %s.\n", last_modem_sfr_reason);
-		// If the NV protected file (critical_info) is destroyed, restart to recovery to inform user
+		strscpy(last_modem_sfr_reason, sfr_buf, MAX_SSR_REASON_LEN);
+		pr_err("modem subsystem failure reason: %s.\n",
+			last_modem_sfr_reason);
+		// If the NV protected file (critical_info) is destroyed,
+		// restart to recovery to inform user
 		if (strstr(last_modem_sfr_reason, STR_NV_SIGNATURE_DESTROYED)) {
-			pr_err("errimei_dev: the NV has been destroyed, should restart to recovery\n");
-			schedule_delayed_work(&create_kobj_work, msecs_to_jiffies(1*1000));
+			pr_err("err imei_dev: the NV has been destroyed, should restart to recovery\n");
+			schedule_delayed_work(&create_kobj_work,
+					      msecs_to_jiffies(1*1000));
 		}
-  }
+	}
 	mdm->get_restart_reason = false;
 }
 
@@ -1323,10 +1327,14 @@ static struct platform_driver mdm_driver = {
 
 static int __init mdm_register(void)
 {
-	last_modem_sfr_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_modem_sfr_file_ops);
-	if (!last_modem_sfr_entry) {
-		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
-	}
+	last_modem_sfr_entry = proc_create("last_mcrash",
+					   S_IFREG | 0444,
+					   NULL,
+					   &last_modem_sfr_file_ops);
+
+	if (!last_modem_sfr_entry)
+		pr_err("pil: cannot create proc entry last_mcrash\n");
+
 	return platform_driver_register(&mdm_driver);
 }
 module_init(mdm_register);
@@ -1335,8 +1343,8 @@ static void __exit mdm_unregister(void)
 {
 	schedule_work(&clean_kobj_work);
 	if (last_modem_sfr_entry) {
-            remove_proc_entry("last_mcrash", NULL);
-            last_modem_sfr_entry = NULL;
+		remove_proc_entry("last_mcrash", NULL);
+		last_modem_sfr_entry = NULL;
 	}
 	platform_driver_unregister(&mdm_driver);
 }

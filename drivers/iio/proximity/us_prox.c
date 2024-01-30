@@ -1,5 +1,4 @@
 /*
- * Copyright (C) 2018 XiaoMi, Inc.
  * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -140,17 +139,18 @@ int us_afe_callback(int data)
 		el_data.data1 = 5;
 
 	if (g_us_prox) {
-		ret = iio_push_to_buffers(g_us_prox->prox_idev, (unsigned char *)&el_data);
+		ret = iio_push_to_buffers(g_us_prox->prox_idev,
+					 (unsigned char *)&el_data);
 		if (ret < 0)
-			pr_err("%s: failed to push us prox data to buffer, err=%d\n", __func__, ret);
+			pr_err("%s: failed to push us prox data to buffer, err=%d\n",
+				__func__, ret);
 	}
 
 	return 0;
 }
-
 EXPORT_SYMBOL(us_afe_callback);
 
-static ssize_t us_show_dump_output(struct device *dev,
+static ssize_t dump_output_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct us_prox_data *data;
@@ -165,14 +165,13 @@ static ssize_t us_show_dump_output(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%lu\n", value);
 }
 
-static ssize_t us_store_dump_output(struct device *dev,
+static ssize_t dump_output_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	return 0;
 }
 
-static DEVICE_ATTR(dump_output, S_IWUSR | S_IRUGO,
-		us_show_dump_output, us_store_dump_output);
+static DEVICE_ATTR_RW(dump_output);
 
 
 static struct attribute *us_prox_attributes[] = {

@@ -2,7 +2,6 @@
  * Framework for buffer objects that can be shared across devices/subsystems.
  *
  * Copyright(C) 2011 Linaro Limited. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Sumit Semwal <sumit.semwal@ti.com>
  *
  * Many thanks to linaro-mm-sig list, and specially
@@ -46,9 +45,6 @@
 
 #include <uapi/linux/dma-buf.h>
 #include <uapi/linux/magic.h>
-
-#define CREATE_TRACE_POINTS
-#include <trace/events/dmabuf.h>
 
 static atomic_long_t name_counter;
 
@@ -106,8 +102,65 @@ out:
 			     dentry->d_name.name, ret > 0 ? name : "");
 }
 
+static void dma_buf_release(struct dentry *dentry)
+{
+	struct dma_buf *dmabuf;
+	int dtor_ret = 0;
+
+	dmabuf = dentry->d_fsdata;
+
+	spin_lock(&dentry->d_lock);
+	dentry->d_fsdata = NULL;
+	spin_unlock(&dentry->d_lock);
+	BUG_ON(dmabuf->vmapping_counter);
+
+	/*
+	 * Any fences that a dma-buf poll can wait on should be signaled
+	 * before releasing dma-buf. This is the responsibility of each
+	 * driver that uses the reservation objects.
+	 *
+	 * If you hit this BUG() it means someone dropped their ref to the
+	 * dma-buf while still having pending operation to the buffer.
+	 */
+	BUG_ON(dmabuf->cb_shared.active || dmabuf->cb_excl.active);
+
+	if (dmabuf->dtor)
+		dtor_ret = dmabuf->dtor(dmabuf, dmabuf->dtor_data);
+
+	if (!dtor_ret)
+		dmabuf->ops->release(dmabuf);
+	else
+		pr_warn_ratelimited("Leaking dmabuf %s because destructor failed error:%d\n",
+				    dmabuf->buf_name, dtor_ret);
+
+	dma_buf_ref_destroy(dmabuf);
+
+	if (dmabuf->resv == (struct reservation_object *)&dmabuf[1])
+		reservation_object_fini(dmabuf->resv);
+
+	module_put(dmabuf->owner);
+	dmabuf_dent_put(dmabuf);
+}
+
+static int dma_buf_file_release(struct inode *inode, struct file *file)
+{
+	struct dma_buf *dmabuf;
+
+	if (!is_dma_buf_file(file))
+		return -EINVAL;
+
+	dmabuf = file->private_data;
+
+	mutex_lock(&db_list.lock);
+	list_del(&dmabuf->list_node);
+	mutex_unlock(&db_list.lock);
+
+	return 0;
+}
+
 static const struct dentry_operations dma_buf_dentry_ops = {
 	.d_dname = dmabuffs_dname,
+	.d_release = dma_buf_release,
 };
 
 static struct vfsmount *dma_buf_mnt;
@@ -125,62 +178,9 @@ static struct file_system_type dma_buf_fs_type = {
 	.kill_sb = kill_anon_super,
 };
 
-static int dma_buf_release(struct inode *inode, struct file *file)
-{
-	struct dma_buf *dmabuf;
-	struct dentry *dentry = file->f_path.dentry;
-	int dtor_ret = 0;
-        pid_t tgid = task_tgid_nr(current);
-
-	if (!is_dma_buf_file(file))
-		return -EINVAL;
-
-	dmabuf = file->private_data;
-
-	spin_lock(&dentry->d_lock);
-	dentry->d_fsdata = NULL;
-	spin_unlock(&dentry->d_lock);
-	BUG_ON(dmabuf->vmapping_counter);
-
-	/*
-	 * Any fences that a dma-buf poll can wait on should be signaled
-	 * before releasing dma-buf. This is the responsibility of each
-	 * driver that uses the reservation objects.
-	 *
-	 * If you hit this BUG() it means someone dropped their ref to the
-	 * dma-buf while still having pending operation to the buffer.
-	 */
-	BUG_ON(dmabuf->cb_shared.active || dmabuf->cb_excl.active);
-
-	mutex_lock(&db_list.lock);
-	list_del(&dmabuf->list_node);
-	mutex_unlock(&db_list.lock);
-
-	if (dmabuf->dtor)
-		dtor_ret = dmabuf->dtor(dmabuf, dmabuf->dtor_data);
-
-	if (!dtor_ret)
-		dmabuf->ops->release(dmabuf);
-	else
-		pr_warn_ratelimited("Leaking dmabuf %s because destructor failed error:%d\n",
-				    dmabuf->buf_name, dtor_ret);
-
-	trace_dma_buf_release(inode, file, tgid);
-
-	dma_buf_ref_destroy(dmabuf);
-
-	if (dmabuf->resv == (struct reservation_object *)&dmabuf[1])
-		reservation_object_fini(dmabuf->resv);
-
-	module_put(dmabuf->owner);
-	dmabuf_dent_put(dmabuf);
-	return 0;
-}
-
 static int dma_buf_mmap_internal(struct file *file, struct vm_area_struct *vma)
 {
 	struct dma_buf *dmabuf;
-        pid_t tgid = task_tgid_nr(current);
 
 	if (!is_dma_buf_file(file))
 		return -EINVAL;
@@ -191,7 +191,7 @@ static int dma_buf_mmap_internal(struct file *file, struct vm_area_struct *vma)
 	if (vma->vm_pgoff + vma_pages(vma) >
 	    dmabuf->size >> PAGE_SHIFT)
 		return -EINVAL;
-	trace_dma_buf_mmap_internal(file, vma, tgid);
+
 	return dmabuf->ops->mmap(dmabuf, vma);
 }
 
@@ -496,7 +496,7 @@ static void dma_buf_show_fdinfo(struct seq_file *m, struct file *file)
 }
 
 static const struct file_operations dma_buf_fops = {
-	.release	= dma_buf_release,
+	.release	= dma_buf_file_release,
 	.mmap		= dma_buf_mmap_internal,
 	.llseek		= dma_buf_llseek,
 	.poll		= dma_buf_poll,
@@ -598,7 +598,6 @@ struct dma_buf *dma_buf_export(const struct dma_buf_export_info *exp_info)
 	char *bufname;
 	int ret;
 	long cnt;
-        pid_t tgid = task_tgid_nr(current);
 
 	if (!exp_info->resv)
 		alloc_size += sizeof(struct reservation_object);
@@ -669,7 +668,6 @@ struct dma_buf *dma_buf_export(const struct dma_buf_export_info *exp_info)
 
 	mutex_lock(&db_list.lock);
 	list_add(&dmabuf->list_node, &db_list.head);
-	trace_dma_buf_export(exp_info, tgid);
 	mutex_unlock(&db_list.lock);
 
 	return dmabuf;
@@ -747,13 +745,11 @@ EXPORT_SYMBOL_GPL(dma_buf_get);
  */
 void dma_buf_put(struct dma_buf *dmabuf)
 {
-	pid_t tgid = task_tgid_nr(current);
 	if (WARN_ON(!dmabuf || !dmabuf->file))
 		return;
 
 	dma_buf_ref_mod(dmabuf, -1);
 	fput(dmabuf->file);
-	trace_dma_buf_put(dmabuf, tgid);
 }
 EXPORT_SYMBOL_GPL(dma_buf_put);
 
@@ -852,7 +848,6 @@ struct sg_table *dma_buf_map_attachment(struct dma_buf_attachment *attach,
 					enum dma_data_direction direction)
 {
 	struct sg_table *sg_table;
-	pid_t tgid = task_tgid_nr(current);
 
 	might_sleep();
 
@@ -860,7 +855,6 @@ struct sg_table *dma_buf_map_attachment(struct dma_buf_attachment *attach,
 		return ERR_PTR(-EINVAL);
 
 	sg_table = attach->dmabuf->ops->map_dma_buf(attach, direction);
-	trace_dma_buf_map_attachment(attach, direction, tgid);
 	if (!sg_table)
 		sg_table = ERR_PTR(-ENOMEM);
 
@@ -882,7 +876,6 @@ void dma_buf_unmap_attachment(struct dma_buf_attachment *attach,
 				struct sg_table *sg_table,
 				enum dma_data_direction direction)
 {
-	pid_t tgid = task_tgid_nr(current);
 	might_sleep();
 
 	if (WARN_ON(!attach || !attach->dmabuf || !sg_table))
@@ -890,7 +883,6 @@ void dma_buf_unmap_attachment(struct dma_buf_attachment *attach,
 
 	attach->dmabuf->ops->unmap_dma_buf(attach, sg_table,
 						direction);
-	trace_dma_buf_unmap_attachment(attach, sg_table, direction, tgid);
 }
 EXPORT_SYMBOL_GPL(dma_buf_unmap_attachment);
 
@@ -1257,7 +1249,6 @@ EXPORT_SYMBOL_GPL(dma_buf_mmap);
 void *dma_buf_vmap(struct dma_buf *dmabuf)
 {
 	void *ptr;
-	pid_t tgid = task_tgid_nr(current);
 
 	if (WARN_ON(!dmabuf))
 		return NULL;
@@ -1283,7 +1274,6 @@ void *dma_buf_vmap(struct dma_buf *dmabuf)
 
 	dmabuf->vmap_ptr = ptr;
 	dmabuf->vmapping_counter = 1;
-	trace_dma_buf_vmap(dmabuf, tgid);
 
 out_unlock:
 	mutex_unlock(&dmabuf->lock);
@@ -1298,7 +1288,6 @@ EXPORT_SYMBOL_GPL(dma_buf_vmap);
  */
 void dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 {
-	pid_t tgid = task_tgid_nr(current);
 	if (WARN_ON(!dmabuf))
 		return;
 
@@ -1313,7 +1302,6 @@ void dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 		dmabuf->vmap_ptr = NULL;
 	}
 	mutex_unlock(&dmabuf->lock);
-	trace_dma_buf_vunmap(dmabuf, vaddr, tgid);
 }
 EXPORT_SYMBOL_GPL(dma_buf_vunmap);
 
@@ -1330,6 +1318,18 @@ int dma_buf_get_flags(struct dma_buf *dmabuf, unsigned long *flags)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dma_buf_get_flags);
+
+int dma_buf_get_uuid(struct dma_buf *dmabuf, uuid_t *uuid)
+{
+	if (WARN_ON(!dmabuf) || !uuid)
+		return -EINVAL;
+
+	if (!dmabuf->ops->get_uuid)
+		return -ENODEV;
+
+	return dmabuf->ops->get_uuid(dmabuf, uuid);
+}
+EXPORT_SYMBOL_GPL(dma_buf_get_uuid);
 
 #ifdef CONFIG_DEBUG_FS
 static int dma_buf_debug_show(struct seq_file *s, void *unused)

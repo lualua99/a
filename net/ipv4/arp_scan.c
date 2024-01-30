@@ -12,7 +12,6 @@
 #include <linux/skbuff.h>
 #include <linux/delay.h>
 
-
 #define NETLINK_MI_EVENTS 31
 #define NETLINK_MI_GROUP 2
 
@@ -29,7 +28,9 @@ void arp_scan_create_neigh(u32 nexthop, u32 uid)
 	arp_scan_list_t *tmp = NULL;
 	arp_scan_uid_list_t *uid_tmp = NULL;
 	bool found = false;
-	if ((type == IPV4_ADDR_LOOPBACK) || ((type > IPV4_ADDR_MC_MIN) && (type < IPV4_ADDR_MC_MAX))) {
+
+	if ((type == IPV4_ADDR_LOOPBACK) ||
+	    ((type > IPV4_ADDR_MC_MIN) && (type < IPV4_ADDR_MC_MAX))) {
 		pr_info("%s, loopback addr or mc addr, return!", __func__);
 		return;
 	}
@@ -37,11 +38,12 @@ void arp_scan_create_neigh(u32 nexthop, u32 uid)
 	raw_spin_lock(&arp_scan_lock);
 	list_for_each_entry(uid_tmp, &arp_scan_uid_list_head, list) {
 		if (uid == uid_tmp->arp_scan_uid) {
-			pr_info("%s, already save the app uid, return!", __func__);
+			pr_info("%s, already save the app uid, return!",
+				__func__);
 			raw_spin_unlock(&arp_scan_lock);
 			return;
 		}
-    }
+	}
 
 	list_for_each_entry(tmp, &arp_scan_list_head, list) {
 		if (uid == tmp->arp_scan_uid) {
@@ -74,7 +76,8 @@ void arp_scan_list_update_map(arp_scan_list_t *entry, u32 nexthop)
 
 	if (entry->arp_scan_list_size > ARP_SCAN_THRESHOLD_COUNT) {
 		//to do that use netlink to report the arp scan.
-		pr_err("%s, app: %u doing arp scan, send to miui qos", __func__, entry->arp_scan_uid);
+		pr_err("%s, app: %u doing arp scan, send to miui qos", __func__,
+		       entry->arp_scan_uid);
 
 		uid_tmp = kmalloc(sizeof(arp_scan_uid_list_t), GFP_ATOMIC);
 		uid_tmp->arp_scan_uid = entry->arp_scan_uid;
@@ -84,7 +87,8 @@ void arp_scan_list_update_map(arp_scan_list_t *entry, u32 nexthop)
 		msg->type = EVENT_MILINK_CONN_ARP_SCAN;
 		msg->len = sizeof(uint32_t) + sizeof(uint32_t) + length;
 		//msg->data = (char *)uid_t;
-		memcpy(msg->data, (const char *)&entry->arp_scan_uid, sizeof(uint32_t));
+		memcpy(msg->data, (const char *)&entry->arp_scan_uid,
+		       sizeof(uint32_t));
 
 		milink_srv_ucast(msg);
 
@@ -98,19 +102,21 @@ arp_scan_list_t *arp_scan_list_entry_kmalloc(u32 uid)
 {
 	size_t len = sizeof(arp_scan_list_t);
 	arp_scan_list_t *plist = kmalloc(len, GFP_ATOMIC);
-	if (plist == NULL) {
-		 pr_err("kmalloc arp_scan_list_entry failed!!!");
+
+	if (!plist) {
+		pr_err("kmalloc arp_scan_list_entry failed!!!");
 		return NULL;
 	}
 
 	memset(plist, 0, len);
-	pr_info("%s, kmalloc arp_scan_list_entry for app's uid = %u!!!", __func__, uid);
+	pr_info("%s, kmalloc arp_scan_list_entry for app's uid = %u!!!",
+		__func__, uid);
 	plist->arp_scan_uid = uid;
 
 	return plist;
 }
 
-/*
+/**
  * message = type + len + data
  */
 void milink_srv_ucast(milink_wlan_message_t *msg)
@@ -120,11 +126,10 @@ void milink_srv_ucast(milink_wlan_message_t *msg)
 	int msg_size = msg->len;
 	int res;
 
-	pr_info("entering: %s\n", __FUNCTION__);
+	pr_info("entering: %s\n", __func__);
 
-	if (!nl_sk) {
+	if (!nl_sk)
 		return;
-	}
 
 	skb = nlmsg_new(NLMSG_ALIGN(msg_size + 1), GFP_ATOMIC);
 	if (!skb) {
@@ -133,23 +138,22 @@ void milink_srv_ucast(milink_wlan_message_t *msg)
 	}
 
 	nlh = nlmsg_put(skb, 0, 0, NETLINK_MI_EVENTS, msg_size + 1, 0);
-	if (nlh == NULL) {
-		pr_err("nlmsg_put failauer \n");
+	if (!nlh) {
+		pr_err("nlmsg_put failauer\n");
 		nlmsg_free(skb);
 		return;
 	}
 	memcpy(nlmsg_data(nlh), (const char *)msg, msg_size);
 
 	pr_info("Sending skb.\n");
-	if (user_pid < 0) {
+	if (user_pid < 0)
 		pr_err("daemon not started, return!\n");
-	}
+
 	res = netlink_unicast(nl_sk, skb, user_pid, MSG_DONTWAIT);
-	if (res < 0) {
+	if (res < 0)
 		pr_err("Error while sending skb to user, err id: %d\n", res);
-	} else {
+	else
 		pr_info("Send success.\n");
-    }
 }
 
 static void nl_data_ready(struct sk_buff *skb)
@@ -161,7 +165,7 @@ static void nl_data_ready(struct sk_buff *skb)
 		nlh = nlmsg_hdr(skb);
 		umsg = NLMSG_DATA(nlh);
 		if (umsg) {
-			pr_info("nl_data_ready: %s\n", umsg);
+			pr_info("%s: %s\n", __func__, umsg);
 			user_pid = nlh->nlmsg_pid;
 		}
 	}
@@ -173,18 +177,17 @@ struct netlink_kernel_cfg cfg = {
 
 void milink_srv_init(void)
 {
-	pr_info("entering: %s\n", __FUNCTION__);
+	pr_info("entering: %s\n", __func__);
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_MI_EVENTS, &cfg);
 	raw_spin_lock_init(&arp_scan_lock);
-	if (!nl_sk) {
+
+	if (!nl_sk)
 		pr_err("Error creating socket.\n");
-	}
 }
 
 void milink_srv_exit(void)
 {
-	pr_info("entering: %s\n", __FUNCTION__);
+	pr_info("entering: %s\n", __func__);
 	sock_release(nl_sk->sk_socket);
 	netlink_kernel_release(nl_sk);
 }
-

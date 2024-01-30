@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/workqueue.h>
@@ -928,9 +927,7 @@ static int msm_cvp_session_process_hfi(
 		dprintk(CVP_ERR, "%s incorrect packet %d, %x\n", __func__,
 				in_pkt->pkt_data[0],
 				in_pkt->pkt_data[1]);
-		offset = in_offset;
-		buf_num = in_buf_num;
-		signal = HAL_NO_RESP;
+		goto exit;
 	} else {
 		offset = cvp_hfi_defs[pkt_idx].buf_offset;
 		buf_num = cvp_hfi_defs[pkt_idx].buf_num;
@@ -1397,9 +1394,10 @@ static int msm_cvp_session_process_hfi_fence(
 	if (rc)
 		goto free_and_exit;
 
-	if (fence_workqueue == NULL) {
-		fence_workqueue = alloc_workqueue("cvp_fence_workqueue", __WQ_LEGACY | WQ_MEM_RECLAIM | WQ_UNBOUND | WQ_HIGHPRI, 1);
-	}
+	if (fence_workqueue == NULL)
+		fence_workqueue = alloc_workqueue("cvp_fence_workqueue",
+						  __WQ_LEGACY | WQ_MEM_RECLAIM |
+						  WQ_UNBOUND | WQ_HIGHPRI, 1);
 
 	thread_num = thread_num + 1;
 	fence_thread_data->inst = inst;

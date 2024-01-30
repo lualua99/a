@@ -150,6 +150,11 @@ static void tk_set_wall_to_mono(struct timekeeper *tk, struct timespec64 wtm)
 static inline void tk_update_sleep_time(struct timekeeper *tk, ktime_t delta)
 {
 	tk->offs_boot = ktime_add(tk->offs_boot, delta);
+	/*
+	 * Timespec representation for VDSO update to avoid 64bit division
+	 * on every update.
+	 */
+	tk->monotonic_to_boot = ktime_to_timespec64(tk->offs_boot);
 }
 
 /*
@@ -1004,9 +1009,8 @@ static int scale64_check_overflow(u64 mult, u64 div, u64 *base)
 	    ((int)sizeof(u64)*8 - fls64(mult) < fls64(rem)))
 		return -EOVERFLOW;
 	tmp *= mult;
-	rem *= mult;
 
-	do_div(rem, div);
+	rem = div64_u64(rem * mult, div);
 	*base = tmp + rem;
 	return 0;
 }
@@ -2192,12 +2196,18 @@ void ktime_get_coarse_ts64(struct timespec64 *ts)
 }
 EXPORT_SYMBOL(ktime_get_coarse_ts64);
 
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
+void __weak package_runtime_monitor(u64 now) {}
+#endif
 /*
  * Must hold jiffies_lock
  */
 void do_timer(unsigned long ticks)
 {
 	jiffies_64 += ticks;
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
+	package_runtime_monitor(jiffies_64);
+#endif
 	calc_global_load(ticks);
 }
 

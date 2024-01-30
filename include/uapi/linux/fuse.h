@@ -275,6 +275,7 @@ struct fuse_file_lock {
 #define FUSE_POSIX_ACL		(1 << 20)
 #define FUSE_ABORT_ERROR	(1 << 21)
 #define FUSE_PASSTHROUGH        (1 << 31)
+
 /**
  * CUSE INIT request/reply flags
  *
@@ -506,7 +507,7 @@ struct fuse_create_in {
 struct fuse_open_out {
 	uint64_t	fh;
 	uint32_t	open_flags;
-        uint32_t        passthrough_fh;
+	uint32_t	passthrough_fh;
 };
 
 struct fuse_release_in {
@@ -789,8 +790,8 @@ struct fuse_notify_retrieve_in {
 };
 
 /* Device ioctls: */
-#define FUSE_DEV_IOC_CLONE             _IOR(229, 0, uint32_t)
-#define FUSE_DEV_IOC_PASSTHROUGH_OPEN  _IOW(229, 1, struct fuse_passthrough_out)
+#define FUSE_DEV_IOC_CLONE		_IOR(229, 0, uint32_t)
+#define FUSE_DEV_IOC_PASSTHROUGH_OPEN	_IOW(229, 1, struct fuse_passthrough_out)
 
 struct fuse_lseek_in {
 	uint64_t	fh;

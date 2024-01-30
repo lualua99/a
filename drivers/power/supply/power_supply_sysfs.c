@@ -67,8 +67,7 @@ static const char * const power_supply_charge_type_text[] = {
 static const char * const power_supply_health_text[] = {
 	"Unknown", "Good", "Overheat", "Dead", "Over voltage",
 	"Unspecified failure", "Cold", "Watchdog timer expire",
-	"Safety timer expire",
-	"Warm", "Cool", "Hot"
+	"Safety timer expire", "Over current", "Warm", "Cool", "Hot"
 };
 
 static const char * const power_supply_technology_text[] = {
@@ -241,6 +240,22 @@ static ssize_t power_supply_show_property(struct device *dev,
 		ret = scnprintf(buf, PAGE_SIZE, "%llx\n",
 				value.int64val);
 		break;
+	case POWER_SUPPLY_PROP_PEN_MAC:
+		ret = scnprintf(buf, PAGE_SIZE, "%llx\n",
+				value.int64val);
+		break;
+	case POWER_SUPPLY_PROP_REVERSE_PEN_SOC:
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n",
+				value.intval);
+		break;
+	case POWER_SUPPLY_PROP_REVERSE_CHG_STATE:
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n",
+				value.intval);
+		break;
+	case POWER_SUPPLY_PROP_REVERSE_PEN_CHG_STATE:
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n",
+				value.intval);
+		break;
 	case POWER_SUPPLY_PROP_RX_CR:
 		ret = scnprintf(buf, PAGE_SIZE, "%llx\n",
 				value.int64val);
@@ -337,6 +352,18 @@ static ssize_t power_supply_store_property(struct device *dev,
 			return count;
 
 		break;
+	case POWER_SUPPLY_PROP_PEN_MAC:
+		ret = kstrtoll(buf, 16, &num_long);
+		if (ret < 0)
+			return ret;
+		value.int64val = num_long;
+		ret = power_supply_set_property(psy, psp, &value);
+		if (ret < 0)
+			return ret;
+		else
+			return count;
+
+		break;
 	default:
 		ret = -EINVAL;
 	}
@@ -380,6 +407,8 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(voltage_max_design),
 	POWER_SUPPLY_ATTR(voltage_min_design),
 	POWER_SUPPLY_ATTR(voltage_now),
+	POWER_SUPPLY_ATTR(voltage_cell1),
+	POWER_SUPPLY_ATTR(voltage_cell2),
 	POWER_SUPPLY_ATTR(voltage_avg),
 	POWER_SUPPLY_ATTR(voltage_ocv),
 	POWER_SUPPLY_ATTR(voltage_boot),
@@ -436,6 +465,9 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(precharge_current),
 	POWER_SUPPLY_ATTR(charge_term_current),
 	POWER_SUPPLY_ATTR(calibrate),
+	POWER_SUPPLY_ATTR(ffc_termination_bbc),
+	POWER_SUPPLY_ATTR(mtbf_current),
+	POWER_SUPPLY_ATTR(has_dp),
 	/* Local extensions */
 	POWER_SUPPLY_ATTR(usb_hc),
 	POWER_SUPPLY_ATTR(usb_otg),
@@ -510,6 +542,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(pd_in_hard_reset),
 	POWER_SUPPLY_ATTR(pd_current_max),
 	POWER_SUPPLY_ATTR(apdo_max),
+	POWER_SUPPLY_ATTR(power_max),
 	POWER_SUPPLY_ATTR(pd_usb_suspend_supported),
 	POWER_SUPPLY_ATTR(charger_temp),
 	POWER_SUPPLY_ATTR(charger_temp_max),
@@ -535,6 +568,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(pd_voltage_min),
 	POWER_SUPPLY_ATTR(sdp_current_max),
 	POWER_SUPPLY_ATTR(dc_thermal_levels),
+	POWER_SUPPLY_ATTR(fg_reset_clock),
 	POWER_SUPPLY_ATTR(connector_type),
 	POWER_SUPPLY_ATTR(parallel_batfet_mode),
 	POWER_SUPPLY_ATTR(parallel_fcc_max),
@@ -547,10 +581,12 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(wireless_wakelock),
 	POWER_SUPPLY_ATTR(wireless_tx_id),
 	POWER_SUPPLY_ATTR(tx_adapter),
+	POWER_SUPPLY_ATTR(wls_car_adapter),
 	POWER_SUPPLY_ATTR(tx_mac),
 	POWER_SUPPLY_ATTR(rx_cr),
 	POWER_SUPPLY_ATTR(rx_cep),
 	POWER_SUPPLY_ATTR(bt_state),
+	POWER_SUPPLY_ATTR(pen_mac),
 	POWER_SUPPLY_ATTR(min_icl),
 	POWER_SUPPLY_ATTR(moisture_detected),
 	POWER_SUPPLY_ATTR(batt_profile_version),
@@ -624,9 +660,12 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(ti_alarm_status),
 	POWER_SUPPLY_ATTR(ti_fault_status),
 	POWER_SUPPLY_ATTR(ti_reg_status),
+	POWER_SUPPLY_ATTR(ti_reset_check),
 	POWER_SUPPLY_ATTR(ti_set_bus_protection_for_qc3),
+	POWER_SUPPLY_ATTR(ti_set_bus_protection_for_pd),
 	POWER_SUPPLY_ATTR(ti_bus_error_status),
 	POWER_SUPPLY_ATTR(fastcharge_mode),
+	POWER_SUPPLY_ATTR(ffc_iterm),
 	POWER_SUPPLY_ATTR(dp_dm_bq),
 	POWER_SUPPLY_ATTR(pd_authentication),
 	POWER_SUPPLY_ATTR(passthrough_curr_max),
@@ -640,6 +679,22 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(recharge_vbat),
 	POWER_SUPPLY_ATTR(step_vfloat_index),
 	POWER_SUPPLY_ATTR(night_charging),
+	POWER_SUPPLY_ATTR(i2c_error_count),
+	/* PS5169 properties */
+	POWER_SUPPLY_ATTR(ps_en),
+	POWER_SUPPLY_ATTR(ps_chipid),
+	POWER_SUPPLY_ATTR(ps_cfgmod),
+	POWER_SUPPLY_ATTR(ps_cfg_flip),
+	POWER_SUPPLY_ATTR(ps_cfg_usb),
+	POWER_SUPPLY_ATTR(ps_cfg_dp),
+	POWER_SUPPLY_ATTR(ps_cfg_usb_dp),
+	POWER_SUPPLY_ATTR(ps_rmov_usb),
+	POWER_SUPPLY_ATTR(ps_rmov_dp),
+	POWER_SUPPLY_ATTR(ps_rmov_usb_dp),
+	POWER_SUPPLY_ATTR(eq0_tx),
+	POWER_SUPPLY_ATTR(eq1_tx),
+	POWER_SUPPLY_ATTR(eq2_tx),
+	POWER_SUPPLY_ATTR(tx_gain),
 #ifdef CONFIG_BATT_VERIFY_BY_DS28E16
 	/* battery verify properties */
 	POWER_SUPPLY_ATTR(romid),
@@ -658,14 +713,22 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(maxim_batt_cycle_count),
 #endif
 	POWER_SUPPLY_ATTR(chip_ok),
+	POWER_SUPPLY_ATTR(smart_batt),
 	/* DIV 2 properties */
 	POWER_SUPPLY_ATTR(div_2_mode),
 	POWER_SUPPLY_ATTR(reverse_chg_mode),
 	POWER_SUPPLY_ATTR(reverse_chg_state),
+	POWER_SUPPLY_ATTR(reverse_pen_chg_state),
 	POWER_SUPPLY_ATTR(reverse_gpio_state),
 	POWER_SUPPLY_ATTR(reset_div_2_mode),
 	POWER_SUPPLY_ATTR(aicl_enable),
 	POWER_SUPPLY_ATTR(otg_state),
+	POWER_SUPPLY_ATTR(reverse_chg_hall3),
+	POWER_SUPPLY_ATTR(reverse_chg_hall4),
+	POWER_SUPPLY_ATTR(reverse_pen_soc),
+	POWER_SUPPLY_ATTR(reverse_vout),
+	POWER_SUPPLY_ATTR(reverse_iout),
+	POWER_SUPPLY_ATTR(cc_toggle_enable),
 	POWER_SUPPLY_ATTR(fg_type),
 	POWER_SUPPLY_ATTR(charger_status),
 	/* Local extensions of type int64_t */
@@ -676,6 +739,9 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(battery_type),
 	POWER_SUPPLY_ATTR(cycle_counts),
 	POWER_SUPPLY_ATTR(serial_number),
+	// Factory high temperature to intercept
+	POWER_SUPPLY_ATTR(temp_max_fac),
+	POWER_SUPPLY_ATTR(time_ot),
 };
 
 static struct attribute *

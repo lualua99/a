@@ -2,7 +2,6 @@
  * hwconf_manager.c
  *
  * Copyright (C) 2016 Xiaomi Ltd.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -67,42 +66,40 @@ hw_item *hw_item_get_child(hw_item *root, const char *name)
 void hw_item_add_child(hw_item *root, const char *name, const char *value)
 {
 	hw_item *child, *it;
-	pr_info("hw_item_add_child: %s:%s\n", name, value);
+
+	pr_info("%s: %s:%s\n", __func__, name, value);
 
 	it = kmalloc(sizeof(hw_item), GFP_KERNEL);
-	if (!it) {
+	if (!it)
 		return;
+
+	memset(it, 0, sizeof(hw_item));
+	if (name)
+		strlcpy(it->name, name, MAX_LEN_STR);
+
+	if (value)
+		strlcpy(it->value, value, MAX_LEN_STR);
+
+	child = root->child;
+
+	if (!child) {
+		root->child = it;
 	} else {
-		memset(it, 0, sizeof(hw_item));
-		if (name)
-			strlcpy(it->name, name, MAX_LEN_STR);
+		while (child && child->next)
+			child = child->next;
 
-		if (value)
-			strlcpy(it->value, value, MAX_LEN_STR);
-
-		child = root->child;
-
-		if (!child) {
-			root->child = it;
-		} else {
-			while (child && child->next)
-				child = child->next;
-
-			child->next = it;
-		}
+		child->next = it;
 	}
 }
 
 void hw_item_update_child(hw_item *child, const char *name, const char *value)
 {
-	if (!child) {
+	if (!child)
 		return;
-	}
 
 	memset(child->value, 0, MAX_LEN_STR);
-	if (value) {
+	if (value)
 		strlcpy(child->value, value, MAX_LEN_STR);
-	}
 }
 
 void hw_item_remove(hw_item *root, char *component_name)
@@ -118,11 +115,10 @@ void hw_item_remove(hw_item *root, char *component_name)
 	}
 
 	if (item) {
-		if (in_list) {
+		if (in_list)
 			parent->next = item->next;
-		} else {
+		else
 			parent->child = item->next;
-		}
 
 		hw_item_free(item);
 	}
@@ -134,15 +130,13 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 	int i, ident_child;
 	int size = *offset;
 
-	if (!print_buf) {
-		pr_err("hw_item_print: print_buf kmalloc failed\n");
+	if (!print_buf)
 		return NULL;
-	}
 
 	if (ident == 0) {
-		for (i = 0; i < ident * 4; i++) {
+		for (i = 0; i < ident * 4; i++)
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", " ");
-		}
+
 		size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "{\n");
 	}
 
@@ -150,9 +144,9 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 		next = item->next;
 		if (item->child) {
 			if (strlen(item->name) != 0) {
-				for (i = 0; i < (ident + 1) * 4; i++) {
+				for (i = 0; i < (ident + 1) * 4; i++)
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", " ");
-				}
+
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\"");
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", item->name);
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\" : {\n");
@@ -165,20 +159,18 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 			size = *offset;
 
 			if (strlen(item->name) != 0) {
-				for (i = 0; i < (ident + 1) * 4; i++) {
+				for (i = 0; i < (ident + 1) * 4; i++)
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", " ");
-				}
 
-				if (next) {
+				if (next)
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "},\n");
-				} else {
+				else
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "}\n");
-				}
 			}
 		} else {
-			for (i = 0; i < (ident + 1) * 4; i++) {
+			for (i = 0; i < (ident + 1) * 4; i++)
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", " ");
-			}
+
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\"");
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", item->name);
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\"");
@@ -187,11 +179,10 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 			if (strlen(item->value) != 0) {
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\"");
 				size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", item->value);
-				if (next) {
+				if (next)
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\",");
-				} else {
+				else
 					size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\"");
-				}
 			}
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "\n");
 		}
@@ -200,9 +191,9 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 	}
 
 	if (ident == 0) {
-		for (i = 0; i < (ident * 4); i++) {
+		for (i = 0; i < (ident * 4); i++)
 			size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", " ");
-		}
+
 		size += snprintf(print_buf + size, PAGE_SIZE - size, "%s", "}\n");
 	}
 
@@ -214,6 +205,7 @@ static char *hw_item_print(hw_item *item, int ident, int *offset)
 static char *hw_item_dump()
 {
 	int offset = 0;
+
 	memset(print_buf, 0, PAGE_SIZE);
 	return hw_item_print(info_manager->hw_monitor, 0, &offset);
 }
@@ -446,64 +438,7 @@ out:
 static ssize_t hw_info_show(struct kobject *kobj,
 			    struct kobj_attribute *attr, char *buf)
 {
-#if 0
-	int ret;
-	char *src = {0}; /*cJSON_Print(info_manager->hw_config);*/
-	int i;
-	unsigned int blocksize;
-	char *padding;
-	int blocks = 0;
-
-	if (!strncmp(crypto_key, INIT_KEY, sizeof(crypto_key))) {
-		pr_err("crypto_key == INIT_KEY\n");
-		return 0;
-	}
-
-	/* Allocate transform for AES CRYPTO_ALG_TYPE_BLKCIPHER */
-	info_manager->tfm = crypto_alloc_cipher("aes",
-			CRYPTO_ALG_TYPE_BLKCIPHER, CRYPTO_ALG_ASYNC);
-	if (IS_ERR(info_manager->tfm)) {
-		pr_err("Failed to load transform for aes mode!\n");
-		return 0;
-	}
-
-	pr_debug("%s crypto_key=%s\n", __func__, crypto_key);
-	ret = crypto_cipher_setkey(info_manager->tfm, crypto_key,
-				   sizeof(crypto_key));
-	if (ret) {
-		pr_err("Failed to setkey\n");
-		crypto_free_cipher(info_manager->tfm);
-		return 0;
-	}
-
-	blocksize = crypto_cipher_blocksize(info_manager->tfm);
-	if (!blocksize)
-		return 0;
-
-	padding = kmalloc(blocksize + 1, GFP_KERNEL);
-	if (!padding)
-		return -ENOMEM;
-
-	/* start encrypt */
-	for (i = 0; i < strlen(src); i += blocksize) {
-		memset(padding, 0, blocksize + 1);
-		strlcpy(padding, &src[i], blocksize + 1);
-		crypto_cipher_encrypt_one(info_manager->tfm,
-					  &buf[i], padding);
-		blocks++;
-	}
-
-	kfree(padding);
-	crypto_free_cipher(info_manager->tfm);
-
-#if __HWINFO_DECRYPT_DEBUG__
-	hw_info_decrypt_test(buf, blocks * blocksize);
-#endif
-
-	return blocks * blocksize;
-#else
 	return 0;
-#endif
 }
 
 static ssize_t hw_mon_store(struct kobject *kobj,
@@ -602,30 +537,22 @@ static int __init hwconf_init(void)
 	memset(info_manager, 0, sizeof(struct hw_info_manager));
 
 	print_buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
-	if (!print_buf) {
-		pr_err("hwconf_init: print_buf kmalloc failed\n");
+	if (!print_buf)
 		goto print_buf_fail;
-	}
 	memset(print_buf, 0, PAGE_SIZE);
 
 	info_manager->hw_monitor = kmalloc(sizeof(hw_item), GFP_KERNEL);
-	if (!info_manager->hw_monitor) {
-		pr_err("hwconf_init: hw_monitor kmalloc failed\n");
+	if (!info_manager->hw_monitor)
 		goto hw_monitor_fail;
-	}
 	memset(info_manager->hw_monitor, 0, sizeof(hw_item));
 
 	info_manager->hwconf_kobj = kobject_create_and_add("hwconf", NULL);
-	if (!info_manager->hwconf_kobj) {
-		pr_err("hwconf_init: subsystem_register failed\n");
+	if (!info_manager->hwconf_kobj)
 		goto fail;
-	}
 
 	ret = sysfs_create_group(info_manager->hwconf_kobj, &attr_group);
-	if (ret) {
-		pr_err("hwconf_init: subsystem_register failed\n");
+	if (ret)
 		goto sys_fail;
-	}
 
 	info_manager->hwconf_check = debugfs_create_file("hwconf_check",
 			0644, NULL, NULL, &hwconf_check_fops);

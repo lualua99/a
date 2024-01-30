@@ -2,7 +2,6 @@
  * block2mtd.c - create an mtd from a block device
  *
  * Copyright (C) 2001,2002	Simon Evans <spse@secret.org.uk>
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2004-2006	Joern Engel <joern@wh.fh-wedel.de>
  *
  * Licence: GPL
@@ -62,7 +61,7 @@
 #define ERR_BUSY        -2
 #define ERR_PARAM       -3
 
-struct Scsi_Host *g_shost=NULL;
+struct Scsi_Host *g_shost;
 struct request *rq;
 
 /* Info for the block device */
@@ -256,7 +255,7 @@ int do_sync(int cmd, struct block_device *bdev, u32 len)
 		cdb[i] = 0;
 	cdb_len = 10;
 	if (unlikely(!rq)) {
-		pr_err("do_sync rq is NULL ! \n");
+		pr_err("do_sync rq is NULL !\n");
 		return ERR_BUSY;  // ERR_BUSY=-2
 	}
 	scmd = (struct scsi_cmnd *)(rq + 1);
@@ -344,7 +343,7 @@ int do_io(int cmd, struct block_device *bdev,  const u_char *buf, u32 len, u64 o
 		mtd_pages[nr] = virt_to_page(buf + nr*PAGE_SIZE);
 	}
 	if (unlikely(!rq)) {
-		pr_err("do io rq is NULL ! \n");
+		pr_err("do io rq is NULL !\n");
 		return ERR_BUSY;  // ERR_BUSY=-2
 	}
 	scmd = (struct scsi_cmnd *)(rq + 1);
@@ -374,7 +373,7 @@ int do_io(int cmd, struct block_device *bdev,  const u_char *buf, u32 len, u64 o
 	if (cmd == DISK_READ) {
 		scmd->sc_data_direction = DMA_FROM_DEVICE ; //DMA_TO_DEVICE
 	} else if (cmd == DISK_WRITE) {
-		scmd->sc_data_direction = DMA_TO_DEVICE ;
+		scmd->sc_data_direction = DMA_TO_DEVICE;
 	} else {
 		pr_err("unknown cmd error\n");
 		return ERR_PARAM;
@@ -388,7 +387,7 @@ int do_io(int cmd, struct block_device *bdev,  const u_char *buf, u32 len, u64 o
 	}
 
 	ret = scmd->device->host->hostt->queuecommand(scmd->device->host, scmd);
-	pr_info("queuecommand return %x \n", ret);
+	pr_info("queuecommand return %x\n", ret);
 
 	return  ret;
 }
@@ -453,6 +452,7 @@ static int block2mtd_panic_write(struct mtd_info *mtd, loff_t to, size_t len,
 static void block2mtd_sync(struct mtd_info *mtd)
 {
 	struct block2mtd_dev *dev = mtd->priv;
+
 	sync_blockdev(dev->blkdev);
 	return;
 }
@@ -599,8 +599,9 @@ err_free_block2mtd:
 static int ustrtoul(const char *cp, char **endp, unsigned int base)
 {
 	unsigned long result = simple_strtoul(cp, endp, base);
+
 	switch (**endp) {
-	case 'G' :
+	case 'G':
 		result *= 1024;
 	case 'M':
 		result *= 1024;
@@ -636,13 +637,14 @@ static int parse_num(size_t *num, const char *token)
 static inline void kill_final_newline(char *str)
 {
 	char *newline = strrchr(str, '\n');
+
 	if (newline && !newline[1])
 		*newline = 0;
 }
 
 
 #ifndef MODULE
-static int block2mtd_init_called = 0;
+static int block2mtd_init_called;
 /* 80 for device, 12 for erase size */
 static char block2mtd_paramline[80 + 12];
 #endif
@@ -663,7 +665,7 @@ static int block2mtd_setup2(const char *val)
 		return 0;
 	}
 
-	strcpy(str, val);
+	strscpy(str, val, sizeof(str));
 	kill_final_newline(str);
 
 	for (i = 0; i < 2; i++)
@@ -750,6 +752,7 @@ static void block2mtd_exit(void)
 	/* Remove the MTD devices */
 	list_for_each_safe(pos, next, &blkmtd_device_list) {
 		struct block2mtd_dev *dev = list_entry(pos, typeof(*dev), list);
+
 		block2mtd_sync(&dev->mtd);
 		mtd_device_unregister(&dev->mtd);
 		mutex_destroy(&dev->write_mutex);

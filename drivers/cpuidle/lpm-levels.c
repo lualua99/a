@@ -125,8 +125,10 @@ module_param_named(print_parsed_dt, print_parsed_dt, bool, 0664);
 static bool sleep_disabled;
 module_param_named(sleep_disabled, sleep_disabled, bool, 0664);
 
+#ifdef CONFIG_MIHW
 static bool sleep_disabled_dev;
 module_param_named(sleep_disabled_dev, sleep_disabled_dev, bool, 0664);
+#endif
 
 /**
  * msm_cpuidle_get_deep_idle_latency - Get deep idle latency value
@@ -149,6 +151,7 @@ uint32_t register_system_pm_ops(struct system_pm_ops *pm_ops)
 	return 0;
 }
 
+#ifdef CONFIG_MIHW
 /**
  * device type for disable lpm
  *   type     event    bitmap
@@ -158,7 +161,7 @@ uint32_t register_system_pm_ops(struct system_pm_ops *pm_ops)
 #define EVENT_INPUT 0x1
 #define EVENT_FCAM  0x2
 #define EVENT_SUM   0x2
-static unsigned long lpm_dev_bitmp = 0;
+static unsigned long lpm_dev_bitmp;
 
 void lpm_disable_for_dev(bool on, char event_dev)
 {
@@ -174,11 +177,18 @@ void lpm_disable_for_dev(bool on, char event_dev)
 		sleep_disabled_dev = !!on;
 	} else {
 		lpm_dev_bitmp &= ~mask;
-		if(lpm_dev_bitmp == 0)
+		if (lpm_dev_bitmp == 0)
 			sleep_disabled_dev = !!on;
 	}
 }
 EXPORT_SYMBOL(lpm_disable_for_dev);
+#else
+void lpm_disable_for_dev(bool on, char event_dev)
+{
+	// Do nothing
+}
+EXPORT_SYMBOL(lpm_disable_for_dev);
+#endif
 
 static uint32_t least_cluster_latency(struct lpm_cluster *cluster,
 					struct latency_level *lat_level)
@@ -738,7 +748,11 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	uint32_t min_residency, max_residency;
 	struct power_params *pwr_params;
 
+#ifdef CONFIG_MIHW
 	if (lpm_disallowed(sleep_us, dev->cpu, cpu) || sleep_disabled_dev)
+#else
+	if (lpm_disallowed(sleep_us, dev->cpu, cpu))
+#endif
 		goto done_select;
 
 	idx_restrict = cpu->nlevels + 1;
@@ -1438,7 +1452,7 @@ static int lpm_cpuidle_select(struct cpuidle_driver *drv,
 	return cpu_power_select(dev, cpu);
 }
 
-void update_ipi_history(int cpu)
+static void update_ipi_history(int cpu)
 {
 	struct ipi_history *history = &per_cpu(cpu_ipi_history, cpu);
 	ktime_t now = ktime_get();
@@ -1754,7 +1768,7 @@ static void lpm_suspend_wake(void)
 	suspend_in_progress = false;
 	lpm_stats_suspend_exit();
 }
-extern void gpio_debug_print(void);
+
 static int lpm_suspend_enter(suspend_state_t state)
 {
 	int cpu = raw_smp_processor_id();
@@ -1784,7 +1798,7 @@ static int lpm_suspend_enter(suspend_state_t state)
 
 	cpu_prepare(lpm_cpu, idx, false);
 	cluster_prepare(cluster, cpumask, idx, false, 0);
-	gpio_debug_print();
+
 	success = psci_enter_sleep(lpm_cpu, idx, false);
 
 	cluster_unprepare(cluster, cpumask, idx, false, 0, success);
@@ -1874,6 +1888,8 @@ static int lpm_probe(struct platform_device *pdev)
 		pr_err("Failed to create cluster level nodes\n");
 		goto failed;
 	}
+
+	set_update_ipi_history_callback(update_ipi_history);
 
 	/* Add lpm_debug to Minidump*/
 	strlcpy(md_entry.name, "KLPMDEBUG", sizeof(md_entry.name));
